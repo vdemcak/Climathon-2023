@@ -38,7 +38,7 @@ function addCircle(map: Map_, id: string, lngLat: LngLat, color = '#f00') {
 async function fetchRoute(from: LngLat, to: LngLat, excludePoints: LngLat[]) {
   const query = await fetch(
     `https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat
-    }?steps=true&geometries=geojson${excludePoints.length ? `&exclude=${excludePoints.map(lngLat => `point(${lngLat.lng} ${lngLat.lat})`).join(',')
+    }?overview=full&geometries=geojson${excludePoints.length ? `&exclude=${excludePoints.map(lngLat => `point(${lngLat.lng} ${lngLat.lat})`).join(',')
     }` : ''}&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`,
 
     { method: "GET" }
