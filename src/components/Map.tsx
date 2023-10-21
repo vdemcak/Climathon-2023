@@ -11,7 +11,7 @@ function remove(map: Map_, id: string) {
   }
 }
 
-function addCircle(map: Map_, id: string, lngLat: LngLat) {
+function addCircle(map: Map_, id: string, lngLat: LngLat, color = '#f00') {
   remove(map, id);
 
   map.addLayer({
@@ -19,7 +19,7 @@ function addCircle(map: Map_, id: string, lngLat: LngLat) {
     type: 'circle',
     paint: {
       'circle-radius': 10,
-      'circle-color': '#f00'
+      'circle-color': color
     },
     source: {
       type: 'geojson',
@@ -35,10 +35,11 @@ function addCircle(map: Map_, id: string, lngLat: LngLat) {
   })
 }
 
-async function fetchRoute(from: LngLat, to: LngLat) {
+async function fetchRoute(from: LngLat, to: LngLat, excludePoints: LngLat[]) {
   const query = await fetch(
-    `https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat}${
-    ''}?steps=true&geometries=geojson&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`,
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat
+    }?steps=true&geometries=geojson${excludePoints.length ? `&exclude=${excludePoints.map(lngLat => `point(${lngLat.lng} ${lngLat.lat})`).join(',')
+    }` : ''}&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`,
 
     { method: "GET" }
   );
@@ -48,7 +49,7 @@ async function fetchRoute(from: LngLat, to: LngLat) {
   return data.geometry.coordinates;
 }
 
-async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat) {
+async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat, excludePoints: LngLat[] = []) {
   remove(map, id);
 
   map.addLayer({
@@ -61,7 +62,7 @@ async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat) {
         properties: {},
         geometry: {
           type: "LineString",
-          coordinates: await fetchRoute(from, to),
+          coordinates: await fetchRoute(from, to, excludePoints),
         },
       },
     },
@@ -70,7 +71,7 @@ async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat) {
       "line-cap": "round",
     },
     paint: {
-      "line-color": "#3887be",
+      "line-color": "#f00",
       "line-width": 5,
       "line-opacity": 0.75,
     },
@@ -81,6 +82,7 @@ async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat) {
 
 const Map = () => {
   const [path, setPath] = useState([] as mapboxgl.LngLat[]);
+  const [floods, setFloods] = useState([] as mapboxgl.LngLat[]);
 
   return (
     <div className='w-screen h-screen'>
@@ -103,7 +105,7 @@ const Map = () => {
 
           else if(path.length === 1) {
             addCircle(e.target, 'end', e.lngLat);
-            addRoute(e.target, 'route', path[0], e.lngLat);
+            addRoute(e.target, 'route', path[0], e.lngLat, floods);
             setPath([...path, e.lngLat]);
           }
 
@@ -114,6 +116,12 @@ const Map = () => {
             addCircle(e.target, 'start', e.lngLat);
             setPath([e.lngLat]);
           }
+        }}
+        onContextMenu={(e) => {
+          addCircle(e.target, 'flood-' + floods.length, e.lngLat, '#3887be');
+          remove(e.target, 'route');
+          addRoute(e.target, 'route', path[0], path[1], [...floods, e.lngLat]);
+          setFloods([...floods, e.lngLat]);
         }}
         dragRotate={false}
         touchPitch={false}
