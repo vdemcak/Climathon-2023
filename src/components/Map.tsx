@@ -53,6 +53,7 @@ async function fetchRoute(from: LngLat, to: LngLat, excludePoints: LngLat[]) {
 
 async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat, excludePoints: LngLat[] = []) {
   remove(map, id);
+  console.log(points.slice(0, 50));
 
   map.addLayer({
     id: id,
@@ -64,7 +65,7 @@ async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat, exclude
         properties: {},
         geometry: {
           type: "LineString",
-          coordinates: await fetchRoute(from, to, excludePoints),
+          coordinates: await fetchRoute(from, to, points.slice(0, 50).map(point => LngLat.convert([point.x, point.y]))),
         },
       },
     },
@@ -83,6 +84,7 @@ async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat, exclude
 const noise2D = createNoise2D();
 console.log();
 
+let points: { x: number, y: number, v: number }[] = [];
 
 function addHeatmap(map: Map_, id: string) {
 
@@ -91,7 +93,7 @@ function addHeatmap(map: Map_, id: string) {
   // bratislava bounds
   const bratislava = LngLat.convert([17.1077, 48.1486]).toBounds(5000);
   // random point in bratislava
-  const points = [];
+  points = [];
 
   for (let i = 0; i < 10000; i++) {
     const x = Math.random() * (bratislava.getEast() - bratislava.getWest()) + bratislava.getWest();
@@ -103,11 +105,10 @@ function addHeatmap(map: Map_, id: string) {
     const noise = (noise2D(x * frequency, y * frequency) + 1) / 2;
 
     const v = noise * Math.cos(LngLat.convert([x, y]).distanceTo(LngLat.convert([17.1077, 48.1486])) / 5000 * Math.PI / 2);
-
-    console.log(v);
-
     points.push({ x, y, v });
   }
+
+  points.sort((a, b) => b.v - a.v);
 
 
 
