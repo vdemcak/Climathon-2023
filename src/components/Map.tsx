@@ -4,8 +4,10 @@ import { LngLat, Map as Map_ } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useState } from "react";
 
+import { createNoise2D } from 'simplex-noise';
+
 function remove(map: Map_, id: string) {
-  if(map.getLayer(id)) {
+  if (map.getLayer(id)) {
     map.removeLayer(id);
     map.removeSource(id);
   }
@@ -39,7 +41,7 @@ async function fetchRoute(from: LngLat, to: LngLat, excludePoints: LngLat[]) {
   const query = await fetch(
     `https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat
     }?overview=full&geometries=geojson${excludePoints.length ? `&exclude=${excludePoints.map(lngLat => `point(${lngLat.lng} ${lngLat.lat})`).join(',')
-    }` : ''}&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`,
+      }` : ''}&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`,
 
     { method: "GET" }
   );
@@ -78,6 +80,116 @@ async function addRoute(map: Map_, id: string, from: LngLat, to: LngLat, exclude
   });
 }
 
+const noise2D = createNoise2D();
+console.log();
+
+
+function addHeatmap(map: Map_, id: string) {
+
+
+
+  // bratislava bounds
+  const bratislava = LngLat.convert([17.1077, 48.1486]).toBounds(5000);
+  // random point in bratislava
+  const points = [];
+
+  for (let i = 0; i < 10000; i++) {
+    const x = Math.random() * (bratislava.getEast() - bratislava.getWest()) + bratislava.getWest();
+    const y = Math.random() * (bratislava.getNorth() - bratislava.getSouth()) + bratislava.getSouth();
+
+
+    const frequency = 30;
+
+    const noise = (noise2D(x * frequency, y * frequency) + 1) / 2;
+
+    const v = noise * Math.cos(LngLat.convert([x, y]).distanceTo(LngLat.convert([17.1077, 48.1486])) / 5000 * Math.PI / 2);
+
+    console.log(v);
+
+    points.push({ x, y, v });
+  }
+
+
+
+
+  const geojson = {
+    "type": "FeatureCollection",
+    "features": points.map(point => (
+      {
+        "type": "Feature",
+        "properties": {
+          "mm": point.v * 5,
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [point.x, point.y]
+        }
+      })
+    ),
+  };
+
+  console.log(geojson);
+
+  function staticZoom(multiplier: number) {
+    const interpolate = [];
+
+    for (let i = 0; i <= 25; i += 0.2) {
+      interpolate.push(i, 2 ** i * multiplier);
+    }
+
+    return [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      ...interpolate
+    ] as any;
+  }
+
+  map.addLayer(
+    {
+      'id': id,
+      'type': 'heatmap',
+      'source': {
+        'type': 'geojson',
+        'data': geojson as any
+      },
+      'maxzoom': 24,
+      'paint': {
+        'heatmap-weight': {
+          property: 'mm',
+          type: 'exponential',
+          stops: [
+            [1, 0],
+            [62, 1]
+          ]
+        },
+        // increase intensity as zoom level increases
+        'heatmap-intensity': 5,
+        // assign color values be applied to points depending on their density
+        'heatmap-color': [
+          'interpolate',
+          ['linear'],
+          ['heatmap-density'],
+          0,
+          'rgba(0,255,0,0)',
+          0.2,
+          'rgb(127,255,0)',
+          0.4,
+          'rgb(255,255,0)',
+          0.6,
+          'rgb(255,127,0)',
+          0.8,
+          'rgb(255,0,0)'
+        ],
+        // increase radius as zoom increases
+        'heatmap-radius': staticZoom(0.004),
+        // decrease opacity to transition into the circle layer
+        'heatmap-opacity': 0.5
+      }
+    },
+    'waterway-label'
+  );
+}
 
 
 const Map = () => {
@@ -95,21 +207,26 @@ const Map = () => {
         }}
         onLoad={(e) => {
           e.target.resize();
+          addHeatmap(e.target, 'heatmap');
         }}
         onClick={(e) => {
-          if(path.length === 0) {
+          console.log(e.target.getZoom());
+
+          if (path.length === 0) {
             console.log(e.lngLat.toArray());
             addCircle(e.target, 'start', e.lngLat);
             setPath([e.lngLat]);
           }
 
-          else if(path.length === 1) {
+
+
+          else if (path.length === 1) {
             addCircle(e.target, 'end', e.lngLat);
             addRoute(e.target, 'route', path[0], e.lngLat, floods);
             setPath([...path, e.lngLat]);
           }
 
-          else if(path.length === 2) {
+          else if (path.length === 2) {
             remove(e.target, 'start');
             remove(e.target, 'end');
             remove(e.target, 'route');
